@@ -33,8 +33,8 @@ library(markdown)
 ```{r} 
 ## Step 2: Load data
 #exp = read_tsv("data/Animacy.txt")
-exp = read_tsv("data/ObjectSize.txt")
-#exp = read_tsv("data/Edibility.txt")
+#exp = read_tsv("data/ObjectSize.txt")
+exp = read_tsv("data/Edibility.txt")
 ```
 
 ## Step 1: Preprocess data
@@ -59,7 +59,8 @@ round(mean(trialCount$slow/trialCount$correctTrials)*100,2)
 exp.tidy=exp %>%
   filter(RT<4000) %>%
   filter(correct==1) %>%
-  filter(phase=='SixItems')
+  filter(phase=='SixItems') %>%
+  filter(repeatDist==0) # for technical error trials in experiment 3 only.
   
 # Now only include subjects who had more than 1 trial speeded trial in each of 4 conditions
 exp.tidy=exp.tidy %>%
@@ -94,6 +95,7 @@ round(mean(trialCountIncludedSubs$mixedCount),2)
 exp.accuracy=exp %>%
   group_by(sub,conditionName, category) %>%
   filter(phase=='SixItems') %>%
+  filter(repeatDist==0) %>% # for technical error trials in experiment 3 only.
   filter(is.element(sub,includedSubs)) %>% # only use subs included in RT anlayses for consistency
   summarise(meanAcc = mean(correct)) # average wtihin subjects
 
@@ -175,19 +177,38 @@ Effect of their interaction on RT:  (*F*(1,`r RTResults$ANOVA$DFd[2]`) = `r roun
 
 ```{r} 
 
-## Inferential statistics: Mixed-effects models
-# model: main effects of category and condition
-exp.tidy$logRT=log(exp.tidy$RT)
+##Inferential statistics: Mixed-effects models
+# Fixed effects of category and condition, and random effects of subjects and target items on the intercept, and random slopes for the effect of condition on subjects
 
-# Main model with full condition structure
-exp.Model <- lmer(RT ~ conditionName*category + (1|sub), data=exp.tidy)
+# Note: no effect modeled of condition on targetItems; model fails to converge.
 
-# null model - no fixed factor of condition (i.e., uniform/mixed) and it's interaction
-exp.NullModel <- lmer(RT ~ category + (1|sub), data=exp.tidy)
+# Maximum model 
+exp.MaxModel <- lmer(RT ~ category*conditionName + (1 + conditionName|sub) + (1+ conditionName|targetItem), data=exp.tidy, REML=TRUE)
 
-# model comparison
-anova(exp.NullModel,exp.Model)
+## Do we need random slopes on subjects?
+exp.ModelMod1 <- lmer(RT ~ category*conditionName + (1|sub) + (1+ conditionName|targetItem), data=exp.tidy, REML=TRUE) 
+summary(exp.ModelMod1)
+anova(exp.ModelMod1,exp.MaxModel) # if no difference, can remove random slopes on subjects
+
+## Do we need random slopes on items?
+exp.ModelMod2 <- lmer(RT ~ category*conditionName + (1|sub) + (1|targetItem), data=exp.tidy, REML=TRUE) 
+summary (exp.ModelMod2)
+anova(exp.ModelMod1,exp.ModelMod2) # if no difference, can remove random slopes on items
+
+# null model - no fixed factor of condition or it's interactino (i.e., uniform/mixed), same random effects structure
+exp.NullModel <- lmer(RT ~ category + (1 |sub) + (1 |targetItem), data=exp.tidy, REML=FALSE)
+
+# Essential model comparison
+anova(exp.NullModel,exp.ModelMod2)
 
 
 ```
+
+Summary:
+
+E1: Animacy: Maximum model fails to converge, as does a model with either random slopes on subjects or random slopes on target items.  Probably because less data overall than E2 or E3.
+
+E2: Object Size: Maximum models and models with random slopes do converge. Random slopes have somewhat high correlation with the intercept, but don't explain extra variance.
+
+E3:Edibility: Random effect of condition on subjects (i.e., "(1 + conditionName|sub)") had a perfect negative correlation with the intercept, suggesting that it was not explaining variance. Similarily, the random effects of condition on items also had a very high negative correlation with the intercept.
 
