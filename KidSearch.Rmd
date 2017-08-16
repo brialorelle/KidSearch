@@ -33,8 +33,8 @@ library(markdown)
 ```{r} 
 ## Step 2: Load data
 #exp = read_tsv("data/Animacy.txt")
-#exp = read_tsv("data/ObjectSize.txt")
-exp = read_tsv("data/Edibility.txt")
+exp = read_tsv("data/ObjectSize.txt")
+#exp = read_tsv("data/Edibility.txt")
 ```
 
 ## Step 1: Preprocess data
@@ -47,7 +47,7 @@ exp$categoryNum = as.numeric(exp$categoryNum)
 # count how many trials per subject
 trialCount=exp %>%
   group_by(sub) %>%
-  summarise(trials=sum(phase=='SixItems'), correctTrials=sum(correct==1 & phase=='SixItems'), errors=sum(correct==0 & phase=='SixItems'), slow=sum(RT>4000 & phase=='SixItems' & correct==1))
+  summarise(trials=sum(phase=='SixItems'), correctTrials=sum(correct==1 & phase=='SixItems'), errors=sum(correct==0 & phase=='SixItems'), slow=sum(RT>4000 & phase=='SixItems' & correct==1))  
 
 # what percentage of all trials were incorrect?
 round(mean(trialCount$errors/trialCount$trials)*100,2)
