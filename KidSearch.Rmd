@@ -1,0 +1,193 @@
+---
+title: "KidSearch Analyses:"
+output:
+  html_document:
+    toc: true
+    float: true
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+## GitHub Documents
+
+Code to reproduce the analyses in manuscript, "Animacy and object size are reflected in preschoolers perceptual similarity computations by the preschool years"
+
+## Step 1: Load packages
+
+```{r}
+library(tidyverse) # for data munging
+library(knitr) # for kable table formating
+library(haven) # import and export 'SPSS', 'Stata' and 'SAS' Files
+library(readxl) # import excel files
+library(forcats) #manipulating factors in data frames
+library(ez) # for anova
+library(lme4)
+library(markdown)
+
+
+```
+
+## Step 1: Load data and choose experiment
+```{r} 
+## Step 2: Load data
+#exp = read_tsv("data/Animacy.txt")
+exp = read_tsv("data/ObjectSize.txt")
+#exp = read_tsv("data/Edibility.txt")
+```
+
+## Step 1: Preprocess data
+```{r} 
+exp$sub = as.factor(exp$sub)
+exp$conditionNum = as.numeric(exp$condition)
+exp$categoryNum = as.numeric(exp$categoryNum)
+
+## Step 3: Preprocess data
+# count how many trials per subject
+trialCount=exp %>%
+  group_by(sub) %>%
+  summarise(trials=sum(phase=='SixItems'), correctTrials=sum(correct==1 & phase=='SixItems'), errors=sum(correct==0 & phase=='SixItems'), slow=sum(RT>4000 & phase=='SixItems' & correct==1))
+
+# what percentage of all trials were incorrect?
+round(mean(trialCount$errors/trialCount$trials)*100,2)
+
+# what percentage of correct trials were slow?
+round(mean(trialCount$slow/trialCount$correctTrials)*100,2)
+
+# Only get data with correct trials less than 4 seconds long when there were six items on the screen.
+exp.tidy=exp %>%
+  filter(RT<4000) %>%
+  filter(correct==1) %>%
+  filter(phase=='SixItems')
+  
+# Now only include subjects who had more than 1 trial speeded trial in each of 4 conditions
+exp.tidy=exp.tidy %>%
+  group_by(sub) %>%
+  mutate(indivCountC1=sum(conditionNum==1 & categoryNum==1)) %>%
+  mutate(indivCountC2=sum(conditionNum==1 & categoryNum==2)) %>%
+  mutate(indivCountC3=sum(conditionNum==2 & categoryNum==1)) %>%
+  mutate(indivCountC4=sum(conditionNum==2 & categoryNum==2)) %>%
+  filter(indivCountC1>1) %>%
+  filter(indivCountC2>1) %>%
+  filter(indivCountC3>1) %>%
+  filter(indivCountC4>1) 
+
+# Store included subs
+includedSubs=unique(exp.tidy$sub)
+
+# How many trials are included in each condition in this subset of children?
+trialCountIncludedSubs=exp.tidy %>%
+  group_by(sub) %>% 
+  filter(is.element(sub,includedSubs)) %>% 
+  summarise(trialCount=length(RT), uniformCount=sum(conditionNum==1), mixedCount=sum(conditionNum==2)) 
+
+# overall how many trials (and sd)
+round(mean(trialCountIncludedSubs$trialCount),2)
+round(sd(trialCountIncludedSubs$trialCount),2)
+
+# how many trials on average per condition?
+round(mean(trialCountIncludedSubs$uniformCount),2)
+round(mean(trialCountIncludedSubs$mixedCount),2)
+
+# Compute accuracy means
+exp.accuracy=exp %>%
+  group_by(sub,conditionName, category) %>%
+  filter(phase=='SixItems') %>%
+  filter(is.element(sub,includedSubs)) %>% # only use subs included in RT anlayses for consistency
+  summarise(meanAcc = mean(correct)) # average wtihin subjects
+
+
+```
+
+## Step 3: Accuracy results
+```{r} 
+
+# summarize accuracy results
+condAccMeans=exp.accuracy %>%
+  group_by(conditionName) %>%
+  summarize(avgCondAcc=mean(meanAcc), sdCondRT=sd(meanAcc))
+
+categAccMeans=exp.accuracy %>%
+  group_by(category) %>%
+  summarize(avgCondAcc=mean(meanAcc), sdCondRT=sd(meanAcc))
+
+# descriptive means (mixed v uniform)
+UniMixAcc=round(condAccMeans$avgCondAcc*100,2) 
+CategoryAccs=round(categAccMeans$avgCondAcc*100,2) 
+
+# ANOVA
+accuracyResults=ezANOVA(dv= .(meanAcc), wid= .(sub), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.accuracy), type=3)
+partialEtaSquared=accuracyResults$ANOVA$SSn/(accuracyResults$ANOVA$SSn + accuracyResults$ANOVA$SSd)
+```
+
+Children were `r round(UniMixAcc[1],2)`% accurate on `r condAccMeans$conditionName[1]` trials, and  `r round(UniMixAcc[2],2)`% on `r condAccMeans$conditionName[2]` category trials.
+
+Children were `r round(CategoryAccs[1],2)`% accurate on `r categAccMeans$category[1]` trials, and  `r round(CategoryAccs[2],2)`% on `r categAccMeans$category[2]`  trials.
+
+Effect of condition on accuracy: (*F*(1,`r accuracyResults$ANOVA$DFd[2]`)= `r round(accuracyResults$ANOVA$F[2],2)`, *p* = `r round(accuracyResults$ANOVA$p[2],2)`, *partial eta squared*= `r round(partialEtaSquared[2],2)`
+
+Effect of category on accuracy:  (*F*(1,`r accuracyResults$ANOVA$DFd[3]`)= `r round(accuracyResults$ANOVA$F[3],2)`, *p* = `r round(accuracyResults$ANOVA$p[3],2)`, *partial eta squared*= `r round(partialEtaSquared[3],2)`
+
+Effect of their interaction on accuracy:  (*F*(1,`r accuracyResults$ANOVA$DFd[4]`)= `r round(accuracyResults$ANOVA$F[4],2)`, *p* = `r round(accuracyResults$ANOVA$p[4],2)`, *partial eta squared*= `r round(partialEtaSquared[4],2)`
+
+
+## Step 4: RT results
+```{r} 
+
+## Calculate descriptive statistics: Means and SD
+avgByCondAndCat=exp.tidy %>%
+  group_by(conditionName,category,sub) %>%
+  summarise(meanRT= mean(RT))
+
+# Report descriptives
+condMeans=avgByCondAndCat %>%
+  group_by(conditionName) %>%
+  summarize(avgCondRT=mean(meanRT), sdCondRT=sd(meanRT))
+
+UniMixRT=round(condMeans$avgCondRT,0) 
+UniMixRT_SDs=round(condMeans$sdCondRT,0) 
+
+# now by category
+categoryMeans=avgByCondAndCat %>%
+  group_by(category) %>%
+  summarize(avgCatRT=mean(meanRT), sdCatRT=sd(meanRT))
+
+# output category means
+CategoryRT=round(categoryMeans$avgCatRT,0) 
+Category_SDs=round(categoryMeans$sdCatRT,0) 
+
+## Inferential statistics: ANOVA and mixed-effects model
+RTResults=ezANOVA(dv= .(RT), wid= .(sub), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.tidy), type=3)
+partialEtaSquaredRT=RTResults$ANOVA$SSn/(RTResults$ANOVA$SSn + RTResults$ANOVA$SSd)
+```
+
+Children took `r round(UniMixRT[1],0)`ms on `r condMeans$conditionName[1]` category trials, and  `r round(UniMixRT[2],0)`ms on `r condMeans$conditionName[2]` category trials.
+
+Children took `r round(CategoryRT[1],0)`ms on `r categoryMeans$category[1]` trials, and  `r round(CategoryRT[2],0)`ms on `r categoryMeans$category[2]` trials.
+
+Effect of condition on RT: (*F*(1,`r RTResults$ANOVA$DFd[2]`)= `r round(RTResults$ANOVA$F[2],2)`, *p* = `r round(RTResults$ANOVA$p[2],2)`, *partial eta squared*= `r round(partialEtaSquaredRT[2],2)`
+
+Effect of category on RT:  (*F*(1,`r RTResults$ANOVA$DFd[2]`) = `r round(RTResults$ANOVA$F[3],2)`, *p* = `r round(RTResults$ANOVA$p[3],2)`, *partial eta squared*= `r round(partialEtaSquaredRT[3],2)`
+
+Effect of their interaction on RT:  (*F*(1,`r RTResults$ANOVA$DFd[2]`) = `r round(RTResults$ANOVA$F[4],2)`, *p* = `r round(RTResults$ANOVA$p[4],2)`, *partial eta squared*= `r round(partialEtaSquaredRT[4],2)`
+
+
+```{r} 
+
+## Inferential statistics: Mixed-effects models
+# model: main effects of category and condition
+exp.tidy$logRT=log(exp.tidy$RT)
+
+# Main model with full condition structure
+exp.Model <- lmer(RT ~ conditionName*category + (1|sub), data=exp.tidy)
+
+# null model - no fixed factor of condition (i.e., uniform/mixed) and it's interaction
+exp.NullModel <- lmer(RT ~ category + (1|sub), data=exp.tidy)
+
+# model comparison
+anova(exp.NullModel,exp.Model)
+
+
+```
+
