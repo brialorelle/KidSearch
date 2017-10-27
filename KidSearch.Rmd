@@ -32,13 +32,25 @@ library(markdown)
 ## Step 1: Load data and choose experiment
 ```{r} 
 ## Step 2: Load data
-#exp = read_tsv("data/Animacy.txt")
-exp = read_tsv("data/ObjectSize.txt")
-#exp = read_tsv("data/Edibility.txt")
+e1 = read_tsv("data/Animacy.txt")
+e2 = read_tsv("data/ObjectSize.txt")
+e3 = read_tsv("data/Edibility.txt")
+
+## Choose experiment!
+#exp = e1
+#expName = 'Animacy'
+
+#exp = e2
+#expName = 'Size'
+# 
+ exp = e3
+ expName = 'Edibility'
 ```
 
 ## Step 1: Preprocess data
 ```{r} 
+
+##
 exp$sub = as.factor(exp$sub)
 exp$conditionNum = as.numeric(exp$condition)
 exp$categoryNum = as.numeric(exp$categoryNum)
@@ -162,6 +174,19 @@ Category_SDs=round(categoryMeans$sdCatRT,0)
 ## Inferential statistics: ANOVA and mixed-effects model
 RTResults=ezANOVA(dv= .(RT), wid= .(sub), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.tidy), type=3)
 partialEtaSquaredRT=RTResults$ANOVA$SSn/(RTResults$ANOVA$SSn + RTResults$ANOVA$SSd)
+
+## Cohens DZ calculation
+avgByCond=exp.tidy %>%
+  group_by(conditionName,sub) %>%
+  summarise(meanRT= mean(RT))
+
+effectBySub=avgByCond$meanRT[avgByCond$conditionName=='uniform']-avgByCond$meanRT[avgByCond$conditionName=='mixed']
+
+dz=mean(effectBySub)/sd(effectBySub)
+
+#tidyFileName = paste(expName,"_Tidy.txt",sep="")
+#write.table(exp.tidy, file = tidyFileName, sep="\t")
+
 ```
 
 Children took `r round(UniMixRT[1],0)`ms on `r condMeans$conditionName[1]` category trials, and  `r round(UniMixRT[2],0)`ms on `r condMeans$conditionName[2]` category trials.
@@ -173,6 +198,17 @@ Effect of condition on RT: (*F*(1,`r RTResults$ANOVA$DFd[2]`)= `r round(RTResult
 Effect of category on RT:  (*F*(1,`r RTResults$ANOVA$DFd[2]`) = `r round(RTResults$ANOVA$F[3],2)`, *p* = `r round(RTResults$ANOVA$p[3],2)`, *partial eta squared*= `r round(partialEtaSquaredRT[3],2)`
 
 Effect of their interaction on RT:  (*F*(1,`r RTResults$ANOVA$DFd[2]`) = `r round(RTResults$ANOVA$F[4],2)`, *p* = `r round(RTResults$ANOVA$p[4],2)`, *partial eta squared*= `r round(partialEtaSquaredRT[4],2)`
+
+Cohens DZ for condition of interest (uniform vs. mixed): Cohens *dz* = `r round(dz,2)`
+
+```{r}
+## Comparing E1 vs. E2
+#e1tidy=read_tsv("data_tidy/Animacy_Tidy.txt")
+#e2tidy=read_tsv("data_tidy/Size_Tidy.txt")
+
+```
+
+
 
 
 ```{r} 
@@ -203,7 +239,6 @@ anova(exp.NullModel,exp.ModelMod2)
 
 
 ```
-
 Summary:
 
 E1: Animacy: Maximum model fails to converge, as does a model with either random slopes on subjects or random slopes on target items.  Probably because less data overall than E2 or E3.
@@ -211,4 +246,7 @@ E1: Animacy: Maximum model fails to converge, as does a model with either random
 E2: Object Size: Maximum models and models with random slopes do converge. Random slopes have somewhat high correlation with the intercept, but don't explain extra variance.
 
 E3:Edibility: Random effect of condition on subjects (i.e., "(1 + conditionName|sub)") had a perfect negative correlation with the intercept, suggesting that it was not explaining variance. Similarily, the random effects of condition on items also had a very high negative correlation with the intercept.
+
+
+
 

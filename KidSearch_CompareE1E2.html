@@ -123,10 +123,9 @@ $(document).ready(function () {
 <ul>
 <li><a href="#github-documents">GitHub Documents</a></li>
 <li><a href="#step-1-load-packages">Step 1: Load packages</a></li>
-<li><a href="#step-1-load-data-and-choose-experiment">Step 1: Load data and choose experiment</a></li>
+<li><a href="#step-1-load-data-and-choose-e1eriment">Step 1: Load data and choose e1eriment</a></li>
 <li><a href="#step-1-preprocess-data">Step 1: Preprocess data</a></li>
-<li><a href="#step-3-accuracy-results">Step 3: Accuracy results</a></li>
-<li><a href="#step-4-rt-results">Step 4: RT results</a></li>
+<li><a href="#step-2-rt-results-comparison">Step 2: RT results comparison</a></li>
 </ul>
 </div>
 
@@ -138,58 +137,67 @@ $(document).ready(function () {
 <h2>Step 1: Load packages</h2>
 <pre class="r"><code>library(tidyverse) # for data munging
 library(knitr) # for kable table formating
-library(haven) # import and export 'SPSS', 'Stata' and 'SAS' Files
+library(haven) # import and e1ort 'SPSS', 'Stata' and 'SAS' Files
 library(readxl) # import excel files
 library(forcats) #manipulating factors in data frames
 library(ez) # for anova
 library(lme4)
 library(markdown)</code></pre>
 </div>
-<div id="step-1-load-data-and-choose-experiment" class="section level2">
-<h2>Step 1: Load data and choose experiment</h2>
+<div id="step-1-load-data-and-choose-e1eriment" class="section level2">
+<h2>Step 1: Load data and choose e1eriment</h2>
 <pre class="r"><code>## Step 2: Load data
 e1 = read_tsv(&quot;data/Animacy.txt&quot;)
-e2 = read_tsv(&quot;data/ObjectSize.txt&quot;)
-e3 = read_tsv(&quot;data/Edibility.txt&quot;)
-
-## Choose experiment!
-#exp = e1
-#expName = 'Animacy'
-
-#exp = e2
-#expName = 'Size'
-# 
- exp = e3
- expName = 'Edibility'</code></pre>
+e2 = read_tsv(&quot;data/ObjectSize.txt&quot;)</code></pre>
 </div>
 <div id="step-1-preprocess-data" class="section level2">
 <h2>Step 1: Preprocess data</h2>
 <pre class="r"><code>##
-exp$sub = as.factor(exp$sub)
-exp$conditionNum = as.numeric(exp$condition)
-exp$categoryNum = as.numeric(exp$categoryNum)
+e1$sub=e1$sub+100; 
+e1$sub = as.factor(e1$sub)
+e2$sub = as.factor(e2$sub)
+
+e1$conditionNum = as.factor(e1$condition)
+e2$conditionNum = as.factor(e2$condition)
+
+# redundant but nice to have
+e1$conditionName = as.factor(e1$conditionName)
+e2$conditionName = as.factor(e2$conditionName)
+
+e1$categoryNum = as.factor(e1$categoryNum)
+e2$categoryNum = as.factor(e2$categoryNum)
+
+e1$experiment = 'Animacy'
+e2$experiment = 'Size'
 
 ## Step 3: Preprocess data
 # count how many trials per subject
-trialCount=exp %&gt;%
-  group_by(sub) %&gt;%
-  summarise(trials=sum(phase=='SixItems'), correctTrials=sum(correct==1 &amp; phase=='SixItems'), errors=sum(correct==0 &amp; phase=='SixItems'), slow=sum(RT&gt;4000 &amp; phase=='SixItems' &amp; correct==1))  
-
-# what percentage of all trials were incorrect?
-round(mean(trialCount$errors/trialCount$trials)*100,2)</code></pre>
-<pre><code>## [1] 22.34</code></pre>
-<pre class="r"><code># what percentage of correct trials were slow?
-round(mean(trialCount$slow/trialCount$correctTrials)*100,2)</code></pre>
-<pre><code>## [1] 13.52</code></pre>
-<pre class="r"><code># Only get data with correct trials less than 4 seconds long when there were six items on the screen.
-exp.tidy=exp %&gt;%
+# Only get data with correct trials less than 4 seconds long when there were six items on the screen.
+e1.tidy=e1 %&gt;%
   filter(RT&lt;4000) %&gt;%
   filter(correct==1) %&gt;%
   filter(phase=='SixItems') %&gt;%
-  filter(repeatDist==0) # for technical error trials in experiment 3 only.
+  filter(repeatDist==0) # for technical error trials in e1eriment 3 only.
+
+e2.tidy=e2 %&gt;%
+  filter(RT&lt;4000) %&gt;%
+  filter(correct==1) %&gt;%
+  filter(phase=='SixItems') %&gt;%
+  filter(repeatDist==0) # for technical error trials in e1eriment 3 only.
   
 # Now only include subjects who had more than 1 trial speeded trial in each of 4 conditions
-exp.tidy=exp.tidy %&gt;%
+e1.tidy=e1.tidy %&gt;%
+  group_by(sub) %&gt;%
+  mutate(indivCountC1=sum(conditionNum==1 &amp; categoryNum==1)) %&gt;%
+  mutate(indivCountC2=sum(conditionNum==1 &amp; categoryNum==2)) %&gt;%
+  mutate(indivCountC3=sum(conditionNum==2 &amp; categoryNum==1)) %&gt;%
+  mutate(indivCountC4=sum(conditionNum==2 &amp; categoryNum==2)) %&gt;%
+  filter(indivCountC1&gt;1) %&gt;%
+  filter(indivCountC2&gt;1) %&gt;%
+  filter(indivCountC3&gt;1) %&gt;%
+  filter(indivCountC4&gt;1) 
+
+e2.tidy=e2.tidy %&gt;%
   group_by(sub) %&gt;%
   mutate(indivCountC1=sum(conditionNum==1 &amp; categoryNum==1)) %&gt;%
   mutate(indivCountC2=sum(conditionNum==1 &amp; categoryNum==2)) %&gt;%
@@ -201,213 +209,35 @@ exp.tidy=exp.tidy %&gt;%
   filter(indivCountC4&gt;1) 
 
 # Store included subs
-includedSubs=unique(exp.tidy$sub)
-
-# How many trials are included in each condition in this subset of children?
-trialCountIncludedSubs=exp.tidy %&gt;%
-  group_by(sub) %&gt;% 
-  filter(is.element(sub,includedSubs)) %&gt;% 
-  summarise(trialCount=length(RT), uniformCount=sum(conditionNum==1), mixedCount=sum(conditionNum==2)) 
-
-# overall how many trials (and sd)
-round(mean(trialCountIncludedSubs$trialCount),2)</code></pre>
-<pre><code>## [1] 38.84</code></pre>
-<pre class="r"><code>round(sd(trialCountIncludedSubs$trialCount),2)</code></pre>
-<pre><code>## [1] 14.73</code></pre>
-<pre class="r"><code># how many trials on average per condition?
-round(mean(trialCountIncludedSubs$uniformCount),2)</code></pre>
-<pre><code>## [1] 18.86</code></pre>
-<pre class="r"><code>round(mean(trialCountIncludedSubs$mixedCount),2)</code></pre>
-<pre><code>## [1] 19.97</code></pre>
-<pre class="r"><code># Compute accuracy means
-exp.accuracy=exp %&gt;%
-  group_by(sub,conditionName, category) %&gt;%
-  filter(phase=='SixItems') %&gt;%
-  filter(repeatDist==0) %&gt;% # for technical error trials in experiment 3 only.
-  filter(is.element(sub,includedSubs)) %&gt;% # only use subs included in RT anlayses for consistency
-  summarise(meanAcc = mean(correct)) # average wtihin subjects</code></pre>
+includedSubsE1=unique(e1.tidy$sub)
+includedSubsE2=unique(e2.tidy$sub)</code></pre>
 </div>
-<div id="step-3-accuracy-results" class="section level2">
-<h2>Step 3: Accuracy results</h2>
-<pre class="r"><code># summarize accuracy results
-condAccMeans=exp.accuracy %&gt;%
-  group_by(conditionName) %&gt;%
-  summarize(avgCondAcc=mean(meanAcc), sdCondRT=sd(meanAcc))
+<div id="step-2-rt-results-comparison" class="section level2">
+<h2>Step 2: RT results comparison</h2>
+<pre class="r"><code>bothExp=rbind(e1.tidy, e2.tidy)
+bothExp$experiment=as.factor(bothExp$experiment)
+bothExp$sub=as.factor(bothExp$sub)
 
-categAccMeans=exp.accuracy %&gt;%
-  group_by(category) %&gt;%
-  summarize(avgCondAcc=mean(meanAcc), sdCondRT=sd(meanAcc))
-
-# descriptive means (mixed v uniform)
-UniMixAcc=round(condAccMeans$avgCondAcc*100,2) 
-CategoryAccs=round(categAccMeans$avgCondAcc*100,2) 
-
-# ANOVA
-accuracyResults=ezANOVA(dv= .(meanAcc), wid= .(sub), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.accuracy), type=3)
-partialEtaSquared=accuracyResults$ANOVA$SSn/(accuracyResults$ANOVA$SSn + accuracyResults$ANOVA$SSd)</code></pre>
-<p>Children were 82.08% accurate on mixed trials, and 80.1% on uniform category trials.</p>
-<p>Children were 81.35% accurate on Food trials, and 80.82% on Objects trials.</p>
-<p>Effect of condition on accuracy: (<em>F</em>(1,36)= 0.75, <em>p</em> = 0.39, <em>partial eta squared</em>= 0.02</p>
-<p>Effect of category on accuracy: (<em>F</em>(1,36)= 0.07, <em>p</em> = 0.79, <em>partial eta squared</em>= 0</p>
-<p>Effect of their interaction on accuracy: (<em>F</em>(1,36)= 0.28, <em>p</em> = 0.6, <em>partial eta squared</em>= 0.01</p>
-</div>
-<div id="step-4-rt-results" class="section level2">
-<h2>Step 4: RT results</h2>
-<pre class="r"><code>## Calculate descriptive statistics: Means and SD
-avgByCondAndCat=exp.tidy %&gt;%
-  group_by(conditionName,category,sub) %&gt;%
-  summarise(meanRT= mean(RT))
-
-# Report descriptives
-condMeans=avgByCondAndCat %&gt;%
-  group_by(conditionName) %&gt;%
-  summarize(avgCondRT=mean(meanRT), sdCondRT=sd(meanRT))
-
-UniMixRT=round(condMeans$avgCondRT,0) 
-UniMixRT_SDs=round(condMeans$sdCondRT,0) 
-
-# now by category
-categoryMeans=avgByCondAndCat %&gt;%
-  group_by(category) %&gt;%
-  summarize(avgCatRT=mean(meanRT), sdCatRT=sd(meanRT))
-
-# output category means
-CategoryRT=round(categoryMeans$avgCatRT,0) 
-Category_SDs=round(categoryMeans$sdCatRT,0) 
-
-## Inferential statistics: ANOVA and mixed-effects model
-RTResults=ezANOVA(dv= .(RT), wid= .(sub), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.tidy), type=3)
-partialEtaSquaredRT=RTResults$ANOVA$SSn/(RTResults$ANOVA$SSn + RTResults$ANOVA$SSd)
+## Compare E1 v E2
+E1vE2=ezANOVA(dv= .(RT), wid= .(sub), within= .(conditionName), between =.(experiment), detailed=TRUE, data=data.frame(bothExp, type=3))
+partialEtaSquared=E1vE2$ANOVA$SSn/(E1vE2$ANOVA$SSn + E1vE2$ANOVA$SSd)
 
 ## Cohens DZ calculation
-avgByCond=exp.tidy %&gt;%
+Animacy=e1.tidy %&gt;%
   group_by(conditionName,sub) %&gt;%
   summarise(meanRT= mean(RT))
 
-effectBySub=avgByCond$meanRT[avgByCond$conditionName=='uniform']-avgByCond$meanRT[avgByCond$conditionName=='mixed']
+AnimacyBySub=Animacy$meanRT[Animacy$conditionName=='uniform']-Animacy$meanRT[Animacy$conditionName=='mixed']
 
-dz=mean(effectBySub)/sd(effectBySub)
 
-#tidyFileName = paste(expName,&quot;_Tidy.txt&quot;,sep=&quot;&quot;)
-#write.table(exp.tidy, file = tidyFileName, sep=&quot;\t&quot;)</code></pre>
-<p>Children took 1954ms on mixed category trials, and 1913ms on uniform category trials.</p>
-<p>Children took 1989ms on Food trials, and 1878ms on Objects trials.</p>
-<p>Effect of condition on RT: (<em>F</em>(1,36)= 1.37, <em>p</em> = 0.25, <em>partial eta squared</em>= 0.04</p>
-<p>Effect of category on RT: (<em>F</em>(1,36) = 6.14, <em>p</em> = 0.02, <em>partial eta squared</em>= 0.15</p>
-<p>Effect of their interaction on RT: (<em>F</em>(1,36) = 0.42, <em>p</em> = 0.52, <em>partial eta squared</em>= 0.01</p>
-<p>Cohens DZ for condition of interest (uniform vs. mixed): Cohens <em>dz</em> = -0.22</p>
-<pre class="r"><code>## Comparing E1 vs. E2
-#e1tidy=read_tsv(&quot;data_tidy/Animacy_Tidy.txt&quot;)
-#e2tidy=read_tsv(&quot;data_tidy/Size_Tidy.txt&quot;)</code></pre>
-<pre class="r"><code>##Inferential statistics: Mixed-effects models
-# Fixed effects of category and condition, and random effects of subjects and target items on the intercept, and random slopes for the effect of condition on subjects
+Size=e2.tidy %&gt;%
+  group_by(conditionName,sub) %&gt;%
+  summarise(meanRT= mean(RT))
 
-# Note: no effect modeled of condition on targetItems; model fails to converge.
-
-# Maximum model 
-exp.MaxModel &lt;- lmer(RT ~ category*conditionName + (1 + conditionName|sub) + (1+ conditionName|targetItem), data=exp.tidy, REML=TRUE)
-
-## Do we need random slopes on subjects?
-exp.ModelMod1 &lt;- lmer(RT ~ category*conditionName + (1|sub) + (1+ conditionName|targetItem), data=exp.tidy, REML=TRUE) 
-summary(exp.ModelMod1)</code></pre>
-<pre><code>## Linear mixed model fit by REML ['lmerMod']
-## Formula: RT ~ category * conditionName + (1 | sub) + (1 + conditionName |  
-##     targetItem)
-##    Data: exp.tidy
-## 
-## REML criterion at convergence: 22954.4
-## 
-## Scaled residuals: 
-##     Min      1Q  Median      3Q     Max 
-## -2.3947 -0.7508 -0.2052  0.5661  3.0299 
-## 
-## Random effects:
-##  Groups     Name                 Variance Std.Dev. Corr 
-##  targetItem (Intercept)           14708   121.3         
-##             conditionNameuniform  21603   147.0    -0.88
-##  sub        (Intercept)           68849   262.4         
-##  Residual                        490484   700.3         
-## Number of obs: 1437, groups:  targetItem, 40; sub, 37
-## 
-## Fixed effects:
-##                                      Estimate Std. Error t value
-## (Intercept)                           2010.81      63.24   31.80
-## categoryObjects                       -124.53      64.57   -1.93
-## conditionNameuniform                   -79.22      62.30   -1.27
-## categoryObjects:conditionNameuniform    35.97      87.73    0.41
-## 
-## Correlation of Fixed Effects:
-##             (Intr) ctgryO cndtnN
-## ctgryObjcts -0.512              
-## cndtnNmnfrm -0.542  0.531       
-## ctgryObjc:N  0.385 -0.754 -0.710</code></pre>
-<pre class="r"><code>anova(exp.ModelMod1,exp.MaxModel) # if no difference, can remove random slopes on subjects</code></pre>
-<pre><code>## Data: exp.tidy
-## Models:
-## exp.ModelMod1: RT ~ category * conditionName + (1 | sub) + (1 + conditionName | 
-## exp.ModelMod1:     targetItem)
-## exp.MaxModel: RT ~ category * conditionName + (1 + conditionName | sub) + (1 + 
-## exp.MaxModel:     conditionName | targetItem)
-##               Df   AIC   BIC logLik deviance  Chisq Chi Df Pr(&gt;Chisq)
-## exp.ModelMod1  9 23012 23059 -11497    22994                         
-## exp.MaxModel  11 23015 23073 -11497    22993 0.1082      2     0.9473</code></pre>
-<pre class="r"><code>## Do we need random slopes on items?
-exp.ModelMod2 &lt;- lmer(RT ~ category*conditionName + (1|sub) + (1|targetItem), data=exp.tidy, REML=TRUE) 
-summary (exp.ModelMod2)</code></pre>
-<pre><code>## Linear mixed model fit by REML ['lmerMod']
-## Formula: RT ~ category * conditionName + (1 | sub) + (1 | targetItem)
-##    Data: exp.tidy
-## 
-## REML criterion at convergence: 22957.4
-## 
-## Scaled residuals: 
-##     Min      1Q  Median      3Q     Max 
-## -2.3910 -0.7453 -0.2070  0.5858  3.0958 
-## 
-## Random effects:
-##  Groups     Name        Variance Std.Dev.
-##  targetItem (Intercept)   4541    67.39  
-##  sub        (Intercept)  69624   263.86  
-##  Residual               495518   703.93  
-## Number of obs: 1437, groups:  targetItem, 40; sub, 37
-## 
-## Fixed effects:
-##                                      Estimate Std. Error t value
-## (Intercept)                           2015.11      59.26   34.00
-## categoryObjects                       -129.47      56.23   -2.30
-## conditionNameuniform                   -83.14      52.98   -1.57
-## categoryObjects:conditionNameuniform    43.02      74.60    0.58
-## 
-## Correlation of Fixed Effects:
-##             (Intr) ctgryO cndtnN
-## ctgryObjcts -0.475              
-## cndtnNmnfrm -0.428  0.451       
-## ctgryObjc:N  0.305 -0.644 -0.709</code></pre>
-<pre class="r"><code>anova(exp.ModelMod1,exp.ModelMod2) # if no difference, can remove random slopes on items</code></pre>
-<pre><code>## Data: exp.tidy
-## Models:
-## exp.ModelMod2: RT ~ category * conditionName + (1 | sub) + (1 | targetItem)
-## exp.ModelMod1: RT ~ category * conditionName + (1 | sub) + (1 + conditionName | 
-## exp.ModelMod1:     targetItem)
-##               Df   AIC   BIC logLik deviance  Chisq Chi Df Pr(&gt;Chisq)
-## exp.ModelMod2  7 23010 23047 -11498    22996                         
-## exp.ModelMod1  9 23012 23059 -11497    22994 2.3941      2     0.3021</code></pre>
-<pre class="r"><code># null model - no fixed factor of condition or it's interactino (i.e., uniform/mixed), same random effects structure
-exp.NullModel &lt;- lmer(RT ~ category + (1 |sub) + (1 |targetItem), data=exp.tidy, REML=FALSE)
-
-# Essential model comparison
-anova(exp.NullModel,exp.ModelMod2)</code></pre>
-<pre><code>## Data: exp.tidy
-## Models:
-## exp.NullModel: RT ~ category + (1 | sub) + (1 | targetItem)
-## exp.ModelMod2: RT ~ category * conditionName + (1 | sub) + (1 | targetItem)
-##               Df   AIC   BIC logLik deviance  Chisq Chi Df Pr(&gt;Chisq)
-## exp.NullModel  5 23009 23035 -11500    22999                         
-## exp.ModelMod2  7 23010 23047 -11498    22996 3.0517      2     0.2174</code></pre>
-<p>Summary:</p>
-<p>E1: Animacy: Maximum model fails to converge, as does a model with either random slopes on subjects or random slopes on target items. Probably because less data overall than E2 or E3.</p>
-<p>E2: Object Size: Maximum models and models with random slopes do converge. Random slopes have somewhat high correlation with the intercept, but don’t explain extra variance.</p>
-<p>E3:Edibility: Random effect of condition on subjects (i.e., “(1 + conditionName|sub)”) had a perfect negative correlation with the intercept, suggesting that it was not explaining variance. Similarily, the random effects of condition on items also had a very high negative correlation with the intercept.</p>
+SizeBySub=Size$meanRT[Size$conditionName=='uniform']-Size$meanRT[Size$conditionName=='mixed']</code></pre>
+<p>Effect of experiment on RT: (<em>F</em>(1,58)= 3.62, <em>p</em> = 0.06, <em>partial eta squared</em>= 0.06</p>
+<p>Effect of condition on RT: (<em>F</em>(1,58) = 25.56, <em>p</em> = 0, <em>partial eta squared</em>= 0.31</p>
+<p>Effect of their interaction on RT: (<em>F</em>(1,58) = 5.05, <em>p</em> = 0.03, <em>partial eta squared</em>= 0.08</p>
 </div>
 
 
