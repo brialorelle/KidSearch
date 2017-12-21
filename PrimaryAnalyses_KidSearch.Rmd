@@ -1,9 +1,13 @@
 ---
-title: "KidSearch Analyses:"
+title: 'KidSearch Analyses:'
 output:
   html_document:
-    toc: true
-    float: true
+    float: yes
+    toc: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
 ---
 
 ```{r global_options, include=FALSE}
@@ -17,14 +21,13 @@ Code to reproduce the analyses in manuscript, "Animacy and object size are refle
 ## Step 1: Load packages
 
 ```{r}
-library(tidyverse) # for data munging
 library(knitr) # for kable table formating
-library(haven) # import and export 'SPSS', 'Stata' and 'SAS' Files
 library(readxl) # import excel files
 library(forcats) #manipulating factors in data frames
 library(ez) # for anova
 library(lme4)
-library(markdown)
+source("SEfunctions.R") ## helper code for within subs error bars
+library(tidyverse) # for data munging
 
 
 ```
@@ -43,22 +46,24 @@ e3 = read_tsv("data/Edibility.txt")
 #exp = e2
 #expName = 'Size'
 # 
- exp = e3
- expName = 'Edibility'
+exp = e3
+expName = 'Edibility'
 ```
 
 ## Step 1: Preprocess data
 ```{r} 
 
 ##
-exp$sub = as.factor(exp$sub)
+exp$subject = as.factor(exp$sub)
 exp$conditionNum = as.numeric(exp$condition)
+exp$conditionName = as.factor(exp$conditionName)
 exp$categoryNum = as.numeric(exp$categoryNum)
+exp$category = as.factor(exp$category)
 
 ## Step 3: Preprocess data
 # count how many trials per subject
 trialCount=exp %>%
-  group_by(sub) %>%
+  dplyr::group_by(subject) %>%
   summarise(trials=sum(phase=='SixItems'), correctTrials=sum(correct==1 & phase=='SixItems'), errors=sum(correct==0 & phase=='SixItems'), slow=sum(RT>4000 & phase=='SixItems' & correct==1))  
 
 # what percentage of all trials were incorrect?
@@ -73,10 +78,13 @@ exp.tidy=exp %>%
   filter(correct==1) %>%
   filter(phase=='SixItems') %>%
   filter(repeatDist==0) # for technical error trials in experiment 3 only.
-  
+
+# make log RT
+exp.tidy$logRT=log(exp.tidy$RT);
+
 # Now only include subjects who had more than 1 trial speeded trial in each of 4 conditions
 exp.tidy=exp.tidy %>%
-  group_by(sub) %>%
+  group_by(subject) %>%
   mutate(indivCountC1=sum(conditionNum==1 & categoryNum==1)) %>%
   mutate(indivCountC2=sum(conditionNum==1 & categoryNum==2)) %>%
   mutate(indivCountC3=sum(conditionNum==2 & categoryNum==1)) %>%
@@ -87,12 +95,12 @@ exp.tidy=exp.tidy %>%
   filter(indivCountC4>1) 
 
 # Store included subs
-includedSubs=unique(exp.tidy$sub)
+includedSubs=unique(exp.tidy$subject)
 
 # How many trials are included in each condition in this subset of children?
 trialCountIncludedSubs=exp.tidy %>%
-  group_by(sub) %>% 
-  filter(is.element(sub,includedSubs)) %>% 
+  group_by(subject) %>% 
+  filter(is.element(subject,includedSubs)) %>% 
   summarise(trialCount=length(RT), uniformCount=sum(conditionNum==1), mixedCount=sum(conditionNum==2)) 
 
 # overall how many trials (and sd)
@@ -105,10 +113,10 @@ round(mean(trialCountIncludedSubs$mixedCount),2)
 
 # Compute accuracy means
 exp.accuracy=exp %>%
-  group_by(sub,conditionName, category) %>%
+  group_by(subject,conditionName, category) %>%
   filter(phase=='SixItems') %>%
   filter(repeatDist==0) %>% # for technical error trials in experiment 3 only.
-  filter(is.element(sub,includedSubs)) %>% # only use subs included in RT anlayses for consistency
+  filter(is.element(subject,includedSubs)) %>% # only use subs included in RT anlayses for consistency
   summarise(meanAcc = mean(correct)) # average wtihin subjects
 
 
@@ -131,7 +139,7 @@ UniMixAcc=round(condAccMeans$avgCondAcc*100,2)
 CategoryAccs=round(categAccMeans$avgCondAcc*100,2) 
 
 # ANOVA
-accuracyResults=ezANOVA(dv= .(meanAcc), wid= .(sub), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.accuracy), type=3)
+accuracyResults=ezANOVA(dv= .(meanAcc), wid= .(subject), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.accuracy), type=3)
 partialEtaSquared=accuracyResults$ANOVA$SSn/(accuracyResults$ANOVA$SSn + accuracyResults$ANOVA$SSd)
 ```
 
@@ -151,8 +159,13 @@ Effect of their interaction on accuracy:  (*F*(1,`r accuracyResults$ANOVA$DFd[4]
 
 ## Calculate descriptive statistics: Means and SD
 avgByCondAndCat=exp.tidy %>%
-  group_by(conditionName,category,sub) %>%
-  summarise(meanRT= mean(RT))
+  group_by(conditionName,category,subject) %>%
+  summarise(meanRT= mean(RT))  
+
+avgByCondAndCatLog=exp.tidy %>%
+  dplyr::group_by(conditionName,category,subject) %>%
+  summarise(medLog = median(logRT))  
+
 
 # Report descriptives
 condMeans=avgByCondAndCat %>%
@@ -172,20 +185,43 @@ CategoryRT=round(categoryMeans$avgCatRT,0)
 Category_SDs=round(categoryMeans$sdCatRT,0) 
 
 ## Inferential statistics: ANOVA and mixed-effects model
-RTResults=ezANOVA(dv= .(RT), wid= .(sub), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.tidy), type=3)
+RTResults=ezANOVA(dv= .(RT), wid= .(subject), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.tidy), type=3)
 partialEtaSquaredRT=RTResults$ANOVA$SSn/(RTResults$ANOVA$SSn + RTResults$ANOVA$SSd)
+
+## with log RT? Check to be sure this is the same.
+RTResults_Log=ezANOVA(dv= .(logRT), wid= .(subject), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.tidy), type=3)
+partialEtaSquaredRT=RTResults$ANOVA$SSn/(RTResults$ANOVA$SSn + RTResults$ANOVA$SSd)
+
+
+# Save cleaned data for e1 and e2 to compare them in next sript.
+#tidyFileName = paste(expName,"_Tidy.txt",sep="")
+#write.table(exp.tidy, file = tidyFileName, sep="\t")
 
 ## Cohens DZ calculation
 avgByCond=exp.tidy %>%
-  group_by(conditionName,sub) %>%
+  group_by(conditionName,subject) %>%
   summarise(meanRT= mean(RT))
 
 effectBySub=avgByCond$meanRT[avgByCond$conditionName=='uniform']-avgByCond$meanRT[avgByCond$conditionName=='mixed']
-
 dz=mean(effectBySub)/sd(effectBySub)
 
-#tidyFileName = paste(expName,"_Tidy.txt",sep="")
-#write.table(exp.tidy, file = tidyFileName, sep="\t")
+# get summary for plotting
+plotSummary=summarySEwithin(data=exp.tidy, measurevar="RT", withinvars=c("conditionName","category"), idvar="subject")
+
+# Make quick plot
+library(ggthemes)
+library(ggplot2)
+plotLimits=c(1000,2500)
+dodge <- position_dodge(width = 0.9)
+ggplot(plotSummary, aes(x=category,y=RT, fill=conditionName)) +
+  geom_bar(stat="identity", position=dodge) +  # plot the point
+  geom_errorbar(aes(ymin=RT-se, ymax=RT+se), width=.1, position=dodge) + # make some error bars
+  coord_cartesian(ylim=plotLimits) + # ugh, need this for some reason with bar plots
+  theme_hc(base_size=14)  + ## change ggplot theme, number here modulates size of text
+  theme(axis.ticks.x=element_blank(),    axis.ticks.y=element_blank()) +
+  theme(text=element_text(family="Helvetica Light")) + 
+  labs(x="", y="Search speed (ms)") + # kill redudant x label +
+  ggtitle("Mean RT by Condition & Category")
 
 ```
 
@@ -201,21 +237,11 @@ Effect of their interaction on RT:  (*F*(1,`r RTResults$ANOVA$DFd[2]`) = `r roun
 
 Cohens DZ for condition of interest (uniform vs. mixed): Cohens *dz* = `r round(dz,2)`
 
-```{r}
-## Comparing E1 vs. E2
-#e1tidy=read_tsv("data_tidy/Animacy_Tidy.txt")
-#e2tidy=read_tsv("data_tidy/Size_Tidy.txt")
-
-```
-
-
-
 
 ```{r} 
 
 ##Inferential statistics: Mixed-effects models
 # Fixed effects of category and condition, and random effects of subjects and target items on the intercept, and random slopes for the effect of condition on subjects
-
 # Note: no effect modeled of condition on targetItems; model fails to converge.
 
 # Maximum model 
