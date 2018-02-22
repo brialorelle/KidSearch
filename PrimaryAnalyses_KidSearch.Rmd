@@ -13,7 +13,6 @@ output:
 ```{r global_options, include=FALSE}
 knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
 ```
-
 ## GitHub Documents
 
 Code to reproduce the analyses in manuscript, "Animacy and object size are reflected in preschoolers perceptual similarity computations by the preschool years"
@@ -28,11 +27,9 @@ library(ez) # for anova
 library(lme4)
 source("SEfunctions.R") ## helper code for within subs error bars
 library(tidyverse) # for data munging
-
-
 ```
 
-## Step 1: Load data and choose experiment
+## Step 2: Load data and choose experiment
 ```{r} 
 ## Step 2: Load data
 e1 = read_tsv("data/Animacy.txt")
@@ -50,7 +47,7 @@ exp = e3
 expName = 'Edibility'
 ```
 
-## Step 1: Preprocess data
+## Step 3: Preprocess data
 ```{r} 
 
 ##
@@ -122,7 +119,7 @@ exp.accuracy=exp %>%
 
 ```
 
-## Step 3: Accuracy results
+## Step 4: Accuracy results
 ```{r} 
 
 # summarize accuracy results
@@ -154,7 +151,7 @@ Effect of category on accuracy:  (*F*(1,`r accuracyResults$ANOVA$DFd[3]`)= `r ro
 Effect of their interaction on accuracy:  (*F*(1,`r accuracyResults$ANOVA$DFd[4]`)= `r round(accuracyResults$ANOVA$F[4],2)`, *p* = `r round(accuracyResults$ANOVA$p[4],2)`, *partial eta squared*= `r round(partialEtaSquared[4],2)`
 
 
-## Step 4: RT results
+## Step 5: RT results
 ```{r} 
 
 ## Calculate descriptive statistics: Means and SD
@@ -237,7 +234,7 @@ Effect of their interaction on RT:  (*F*(1,`r RTResults$ANOVA$DFd[2]`) = `r roun
 
 Cohens DZ for condition of interest (uniform vs. mixed): Cohens *dz* = `r round(dz,2)`
 
-
+## Step 6: Mixed effect models
 ```{r} 
 
 ##Inferential statistics: Mixed-effects models
