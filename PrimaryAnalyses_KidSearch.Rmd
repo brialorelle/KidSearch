@@ -26,7 +26,6 @@ library(tidyverse) # for data munging
 e1 = read_tsv("data/Animacy.txt")
 e2 = read_tsv("data/ObjectSize.txt")
 
-
 ## Choose experiment!
 #exp = e1
 #expName = 'Animacy'
@@ -240,9 +239,13 @@ kable(RTResults_NoTrim)
 
 ### How reliable are these effects? Compute in 100 random halves of the data (not reported in MS, supplemental)
 ```{r}
-# numSubs = length(uCnique(exp.tidy$sub))
-# halfSubs = round(numSubs/2)
-fewerSubs=16 
+if (expName=="Animacy"){
+  fewerSubs=8 # half
+}
+  
+if (expName=="Size") {
+  fewerSubs=16  # size of exp 1
+}
 
 dz_splitHalf = array()
 condEffect_splitHalf = array()
