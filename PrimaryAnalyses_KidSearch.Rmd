@@ -17,8 +17,6 @@ knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
 
 Code to reproduce the analyses in manuscript, "Animacy and object size are reflected in preschoolers perceptual similarity computations by the preschool years"
 
-
-
 ## Step 1: Load data and choose experiment
 ```{r} 
 #
@@ -27,17 +25,14 @@ library(tidyverse) # for data munging
 
 e1 = read_tsv("data/Animacy.txt")
 e2 = read_tsv("data/ObjectSize.txt")
-e3 = read_tsv("data/Edibility.txt")
+
 
 ## Choose experiment!
 #exp = e1
 #expName = 'Animacy'
 
-#exp = e2
-#expName = 'Size'
-# 
-exp = e3
-expName = 'Edibility'
+exp = e2
+expName = 'Size'
 
 ```
 
@@ -80,8 +75,7 @@ round(mean(trialCount$slow/trialCount$correctTrials)*100,2)
 exp.tidy=exp %>%
   filter(RT<4000) %>%
   filter(correct==1) %>%
-  filter(phase=='SixItems') %>%
-  filter(repeatDist==0) # for technical error trials in experiment 3 only.
+  filter(phase=='SixItems') 
 
 # also construct dataset without RT trimming
 exp.tidy.notrim=exp %>%
@@ -89,7 +83,6 @@ exp.tidy.notrim=exp %>%
   filter(correct==1) %>%
   filter(phase=='SixItems') %>%
   filter(repeatDist==0) # for technical error trials in experiment 3 only.
-
 
 # make log RT
 exp.tidy$logRT=log(exp.tidy$RT);
@@ -247,19 +240,27 @@ kable(RTResults_NoTrim)
 
 ### How reliable are these effects? Compute in 100 random halves of the data (not reported in MS, supplemental)
 ```{r}
-numSubs = length(unique(exp.tidy$sub))
-halfSubs = round(numSubs/2)
+# numSubs = length(uCnique(exp.tidy$sub))
+# halfSubs = round(numSubs/2)
+fewerSubs=16 
 
 dz_splitHalf = array()
 condEffect_splitHalf = array()
-for (iter in 1:100){
-  theseSubs = sample(unique(exp.tidy$sub),halfSubs)
+sig_out = array()
+for (iter in 1:1000){
+  theseSubs = sample(unique(exp.tidy$sub),fewerSubs)
   avgByCond_Split <- avgByCond %>%
     filter(is.element(subject,theseSubs)) 
   temp=avgByCond_Split$meanRT[avgByCond_Split$conditionName=='uniform']-avgByCond_Split$meanRT[avgByCond_Split$conditionName=='mixed']
   dz_splitHalf[iter]=mean(temp)/sd(temp)
   condEffect_splitHalf[iter]=mean(temp)
+  out = t.test(temp)
+  p_val = out[3]$p.value
+  sig_out[iter]=p_val
 }
+
+# how often would we have found an effect in these samples?
+# sum(sig_out<.05)/5
 ```
 Average cohen's d in 100 random halves of the data = `r mean(dz_splitHalf)`, with SD = `r sd(dz_splitHalf)`
 Average congruency effect in 100 random halves of the data = `r mean(condEffect_splitHalf)`
@@ -279,11 +280,6 @@ if (expName=="Size"){
   levels(plotSummary$conditionName) = c("Uniform Size","Mixed Size")
   relevel(plotSummary$conditionName,ref="Uniform Size")}
   
-if (expName=="Edibility"){
-  levels(plotSummary$category) = c("Edible Targets","Inedible Targets")
-  levels(plotSummary$conditionName) = c("Uniform Edibility","Mixed Edibility")
-  relevel(plotSummary$conditionName,ref="Uniform Edibility")}
-
 
 # Make quick plot
 plotLimits=c(1000,2500)
