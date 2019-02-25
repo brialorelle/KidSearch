@@ -1,4 +1,6 @@
+data_tidy/*
 z_old/*
+z_old/extraplot.R
 z_old/data_tidy?*
 z_old/z_old_compare_e1v21/*
 data/.DS_Store
