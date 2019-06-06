@@ -27,11 +27,11 @@ e1 = read_tsv("data/Animacy.txt")
 e2 = read_tsv("data/ObjectSize.txt")
 
 ## Choose experiment!
-#exp = e1
-#expName = 'Animacy'
+exp = e1
+expName = 'Animacy'
 
-exp = e2
-expName = 'Size'
+#exp = e2
+#expName = 'Size'
 
 ```
 
@@ -42,9 +42,9 @@ library(knitr) # for kable table formating
 library(forcats) #manipulating factors in data frames
 library(ez) # for anova
 library(lme4)
-source("SEfunctions.R") ## helper code for within subs error bars
 library(ggthemes)
 library(ggplot2)
+library(langcog) #multi_boot_standard function for bootstrapping CIs
 library(lmerTest)
 ```
 
@@ -80,8 +80,7 @@ exp.tidy=exp %>%
 exp.tidy.notrim=exp %>%
   filter(RT<10000) %>%
   filter(correct==1) %>%
-  filter(phase=='SixItems') %>%
-  filter(repeatDist==0) # for technical error trials in experiment 3 only.
+  filter(phase=='SixItems') 
 
 # make log RT
 exp.tidy$logRT=log(exp.tidy$RT);
@@ -131,12 +130,14 @@ round(mean(trialCountIncludedSubs$mixedCount),2)
 exp.accuracy <- exp %>%
   dplyr::group_by(subject,conditionName, category) %>%
   filter(phase=='SixItems') %>%
-  filter(repeatDist==0) %>% # for technical error trials in experiment 3 only.
   filter(is.element(subject,includedSubs)) %>% # only use subs included in RT anlayses for consistency
   dplyr::summarise(meanAcc = mean(correct)) # average wtihin subjects
 
 
+
 ```
+
+
 
 ## Step 4: Accuracy results
 ```{r} 
@@ -211,11 +212,6 @@ partialEtaSquaredRT=RTResults$ANOVA$SSn/(RTResults$ANOVA$SSn + RTResults$ANOVA$S
 RTResults_Log=ezANOVA(dv= .(logRT), wid= .(subject), within= .(conditionName, category), detailed=TRUE, data=data.frame(exp.tidy), type=3)
 partialEtaSquaredRT=RTResults$ANOVA$SSn/(RTResults$ANOVA$SSn + RTResults$ANOVA$SSd)
 
-
-# Save cleaned data for e1 and e2 to compare them in next sript.
-#tidyFileName = paste(expName,"_Tidy.txt",sep="")
-#write.table(exp.tidy, file = tidyFileName, sep="\t")
-
 ## Cohens DZ calculation
 avgByCond=exp.tidy %>%
   dplyr::group_by(conditionName,subject) %>%
@@ -223,6 +219,7 @@ avgByCond=exp.tidy %>%
 
 effectBySub=avgByCond$meanRT[avgByCond$conditionName=='uniform']-avgByCond$meanRT[avgByCond$conditionName=='mixed']
 dz=mean(effectBySub)/sd(effectBySub)
+
 ```
 
 ### Output table of RT results
@@ -268,10 +265,15 @@ for (iter in 1:1000){
 Average cohen's d in 100 random halves of the data = `r mean(dz_splitHalf)`, with SD = `r sd(dz_splitHalf)`
 Average congruency effect in 100 random halves of the data = `r mean(condEffect_splitHalf)`
 
+
 ### Make plot (Figure 2)
 ```{r}
-# get summary for plotting
-plotSummary=summarySEwithin(data=exp.tidy, measurevar="RT", withinvars=c("conditionName","category"), idvar="subject")
+plotSummary<- exp.tidy %>%
+  group_by(subject,category,conditionName) %>%
+  dplyr::summarize(meanRT = mean(RT)) %>%
+  group_by(category,conditionName) %>%
+  multi_boot_standard(col = "meanRT")
+  
 
 if (expName=="Animacy"){
   levels(plotSummary$category) = c("Animal Targets","Inanimate Targets")
@@ -284,16 +286,16 @@ if (expName=="Size"){
   relevel(plotSummary$conditionName,ref="Uniform Size")}
   
 
-# Make quick plot
+# Make plot
 plotLimits=c(1000,2500)
 dodge <- position_dodge(width = 0.9)
-(plot_out = ggplot(plotSummary, aes(x=category,y=RT, fill=conditionName)) +
+(plot_out = ggplot(plotSummary, aes(x=category,y=mean, fill=conditionName)) +
   geom_bar(stat="identity", position=dodge, width=.8) +  # plot the point
-  geom_errorbar(aes(ymin=RT-se, ymax=RT+se), width=.1, position=dodge) + # make some error bars
+  geom_pointrange(aes(ymin=ci_lower, ymax=ci_upper), width=.1, position=dodge, alpha=.5) +
   coord_cartesian(ylim=plotLimits) + # ugh, need this for some reason with bar plots
   theme_hc(base_size=16)  + ## change ggplot theme, number here modulates size of text
   theme(axis.ticks.x=element_blank(),   axis.ticks.y=element_blank()) +
-  scale_fill_manual(values = c("#696969","#D3D3D3"), guide="legend")+
+  scale_fill_manual(values = c("#58595B","#D3D3D3"), guide="legend")+
   theme(text=element_text(family="Helvetica")) + 
   theme(aspect.ratio=1) + 
   labs(x="", y="Search speed (ms)") + # kill redudant x label +
@@ -343,3 +345,68 @@ kable(summary(mainModel.report)$coef)
 ```
 
 This result was confired using linear mixed-effect models (B = `r round(model_out$coef[3,1],2)`, SE = `r round(model_out$coef[3,2],2)`, t =  `r round(model_out$coef[3,4],2)`, p =  `r round(model_out$coef[3,5],3)`)
+
+
+
+## Reviewer questions: 
+### (1) Is there a relationship between number of trials completed by each child and overall accuracy?
+```{r}
+trialCount <- trialCount %>%
+  mutate(avg_correct = correctTrials / trials) 
+
+# plot it
+ggplot(trialCount, aes(x=trials, y=avg_correct)) +
+  geom_point() +
+  xlab('Number of test trials completed') +
+  ylab('Average percent correct on test trials') +
+  theme_few()
+
+# Were children who compeleted more trials likely to be more acccurate?
+trials_by_overall_acc = cor.test(trialCount$trials, trialCount$avg_correct)
+kable(trialCount)
+```
+
+
+### (2) Do children who complete more trials show a greater mixed-effect accuracy benefit?
+```{r}
+
+trials_by_acc_effect<- exp %>%
+  dplyr::group_by(subject,conditionName) %>%
+  filter(phase=='SixItems') %>%
+  filter(is.element(subject,includedSubs)) %>% # only use subs included in RT anlayses for consistency
+  summarize(trial_count = n(), condition_acc = mean(correct)) %>%
+  summarize(trial_count_total = trial_count[conditionName=="mixed"] + trial_count[conditionName=="uniform"], cong_effect = condition_acc[conditionName=="mixed"] - condition_acc[conditionName=="uniform"])
+
+ggplot(trials_by_acc_effect, aes(x=trial_count_total, y=cong_effect)) +
+  geom_point() +
+  xlab('Number of test trials completed') +
+  ylab('Congruency RT effect') +
+  theme_few()
+
+
+
+# Were children who compeleted more trials likely to show a congruency accuracy effect?
+trials_by_acc_cong = cor.test(trials_by_acc_effect$trial_count_total, trials_by_acc_effect$cong_effect)
+
+```
+
+
+### (3) Do children who complete more trials show a greater mixed-effect RT benefit?
+```{r}
+trials_by_RT_effect <- exp.tidy %>%
+  group_by(sub, conditionName) %>%
+  summarize(trial_count = n(), condition_rt = mean(RT)) %>%
+  summarize(trial_count_total = trial_count[conditionName=="mixed"] + trial_count[conditionName=="uniform"], cong_effect = condition_rt[conditionName=="uniform"] - condition_rt[conditionName=="mixed"])
+
+ggplot(trials_by_RT_effect, aes(x=trial_count_total, y=cong_effect)) +
+  geom_point() +
+  xlab('Number of test trials completed') +
+  ylab('Congruency RT effect') +
+  theme_few()
+
+# Were children who compeleted more trials likely to show a congruency RT effect?
+trials_by_RT_cong = cor.test(trials_by_RT_effect$trial_count_total, trials_by_RT_effect$cong_effect)
+```
+
+
+Overall, we found that children who completed more trials were not necessarily likely to be more accurate (r = `r trials_by_overall_acc$estimate`, p = `r trials_by_overall_acc$p.value`) or show a mixed-effect benefit in their RTs (r = `r trials_by_RT_cong$estimate`, p = `r trials_by_RT_cong$p.value`); however, we found mild evidence that they might be more likely to show a mixed-effect benefits in their accuracy scores  (r = `r trials_by_acc_cong$estimate`, p = `r trials_by_acc_cong$p.value`). 
